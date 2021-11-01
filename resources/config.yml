@@ -1,0 +1,83 @@
+key_bindings:
+  toggle_fishing_mode: f3
+  equip_bait: f4
+  inventory: b
+  free_look: v
+fishing:
+  left: 914
+  top: 94
+  width: 400
+  height: 800
+  timeouts:
+    noticed:
+      min: 250
+      max: 500
+    reeling:
+      min: 1250
+      max: 2000
+    pause:
+      min: 500
+      max: 800
+    cast:
+      min: 1550
+      max: 1850
+repair:
+  enabled: true
+  interval: 400
+  ui_positions:
+    fishing_rod:
+      x: 1400
+      y: 555
+  use_repair_kit: false
+  timeouts:
+    arm_disarm:
+      min: 1000
+      max: 1500
+    inventory:
+      min: 850
+      max: 1300
+    repair:
+      min: 1000
+      max: 1500
+    confirm:
+      min: 1000
+      max: 1500
+afk_prevention:
+  enabled: true
+  timeouts:
+    move:
+      min: 100
+      max: 1000
+bait:
+  enabled: false
+  ui_positions:
+    select:
+      x: 847
+      y: 397
+    equip:
+      x: 875
+      y: 492
+  timeouts:
+    select:
+      min: 100
+      max: 1000
+    equip:
+      min: 100
+      max: 1000
+colors:
+  green:
+    r: 4
+    g: 227
+    b: 162
+  orange:
+    r: 230
+    g: 110
+    b: 22
+  red:
+    r: 109
+    g: 18
+    b: 21
+resolution:
+  x: 1920
+  y: 1080
+log_lvl: TRACE
