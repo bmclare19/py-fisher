@@ -3,6 +3,7 @@ from numpy import array
 from PIL import ImageGrab
 from app_config import WAITING_FOR_FISH_IMAGE_PATH, FISH_NOTICED_IMAGE_PATH,\
     CAN_BE_REELED_IMAGE_PATH
+from gui.view_model import config_view_model
 
 NOTHING_IMG = cv.imread(WAITING_FOR_FISH_IMAGE_PATH)
 NOTICE_IMG = cv.imread(FISH_NOTICED_IMAGE_PATH)
@@ -13,8 +14,9 @@ MATCH_THRESHOLD = 0.7
 
 class Scanner:
 
-    def __init__(self, config):
-        self.update_config(config)
+    def __init__(self, view_model):
+        self.view_model = view_model
+        self.update_config(view_model)
 
     def update_config(self, config):
         _left, _top, _width, _height = config['fishing']['left'].get(), config['fishing']['top'].get(), \
@@ -72,12 +74,14 @@ class Scanner:
         if self._pixel_match(img, self.reel_color_red):                    
             return 'red'
             
-        return None
+        return 'unknown'
 
-    def can_start_reeling_again(self):
+    def can_start_reeling_again(self, threshold=0.75):
         img = array(ImageGrab.grab(bbox = self.region))
         img_cv = cv.cvtColor(img, cv.COLOR_RGB2BGR)
 
         res = cv.matchTemplate(img_cv, CAN_BE_REELED_IMG, cv.TM_CCOEFF_NORMED)
         _, max_val, _, _ = cv.minMaxLoc(res)
-        return max_val >= MATCH_THRESHOLD
+        return max_val >= threshold
+
+scanner = Scanner(config_view_model)

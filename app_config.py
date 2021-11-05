@@ -9,7 +9,7 @@ def rootPath():
         return path.abspath(".")
 
 ROOT_DIR = rootPath()
-CONFIG_PATH = path.join(ROOT_DIR, 'resources\\config.yml')
+CONFIG_PATH = path.join(ROOT_DIR, 'resources\\config2.yml')
 ICON_PATH = path.join(ROOT_DIR, 'resources\\icon.ico')
 
 # Image files

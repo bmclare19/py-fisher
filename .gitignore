@@ -8,3 +8,4 @@ pyvenv.cfg
 bot.spec
 build/
 dist
+test_scripts/

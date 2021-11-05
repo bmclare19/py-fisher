@@ -4,6 +4,8 @@ from wrappers.win32api_wrapper import left_click, key_up, key_down, press_key, c
 from wrappers.logging_wrapper import trace
 
 CAST_ANIMATION_WAIT_MS = 2000
+FREE_LOOK_END_WAIT_MS = 1700
+EQUIP_BAIT_ANIMATION_WAIT_MS = 1000
 
 class FisherAutoGui:
 
@@ -40,6 +42,14 @@ class FisherAutoGui:
 
     def _delay_ms(self, timeout_ms):
         sleep(timeout_ms / 1000)
+
+    def begin_free_look(self):
+        key_down(self.free_look_key)
+        self._delay_ms(10)
+
+    def end_free_look(self):
+        key_up(self.free_look_key)
+        self._delay_ms(FREE_LOOK_END_WAIT_MS)
 
     def _press_toggle_fishing_mode_key(self):
         trace("Pressing fishing key")
@@ -83,7 +93,8 @@ class FisherAutoGui:
     def run_repair_sequence(self):
         trace("Running repair sequence")
 
-        key_up(self.free_look_key)
+        self.end_free_look()
+
         self._press_toggle_fishing_mode_key()
         self._press_inventory_key()
         self._repair()
@@ -110,17 +121,17 @@ class FisherAutoGui:
     def run_cast_sequence(self):
         trace("Running cast sequence...")
 
-        key_up(self.free_look_key)
-        self._delay_ms(100)
+        # end free look which waits FREE_LOOK_END_WAIT_MS to reset camera
+        self.end_free_look()
+
+        # once camera is reset immediateley free look again
+        self.begin_free_look()
 
         left_click(self.cast_timeout.random_timeout_ms())
         self._delay_ms(100)
 
         trace("Waiting %s ms for cast animation" % CAST_ANIMATION_WAIT_MS)
         self._delay_ms(CAST_ANIMATION_WAIT_MS)
-
-        key_down(self.free_look_key)
-        self._delay_ms(100)
 
     def run_afk_prevention_sequence(self):
         trace("Running afk prevention sequence")
@@ -150,11 +161,12 @@ class FisherAutoGui:
         self._delay_ms(timeout_ms)
 
         # waiting for animation to finish
-        self._delay_ms(1000)
+        self._delay_ms(EQUIP_BAIT_ANIMATION_WAIT_MS)
 
     def run_select_bait_sequence(self):
         trace("Running select bait sequence")
-        key_up(self.free_look_key)
+        self.end_free_look()
+
         press_key(self.equip_bait_key)
         self._press_on_bait()
         self._press_equip_bait()

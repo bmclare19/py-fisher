@@ -4,8 +4,8 @@ key_bindings:
   inventory: b
   free_look: v
 fishing:
-  left: 914
-  top: 94
+  left: 723
+  top: 214
   width: 400
   height: 800
   timeouts:
@@ -81,3 +81,19 @@ resolution:
   x: 1920
   y: 1080
 log_lvl: TRACE
+animation:
+  timeouts:
+    fish_caught:
+      min: 1500
+      max: 2000
+    free_look:
+      min: 1500
+      max: 2000
+    casting:
+      min: 1500
+      max: 2000
+interaction:
+  timeouts:
+    click:
+      min: 30
+      max: 100

@@ -15,21 +15,38 @@ class FisherState:
 
 class Fisher:
 
-    def __init__(self, config):
+    def __init__(self, view_model):
+        self.view_model = view_model
         self.update_interval = 10
         self.state = FisherState.NONE
         self.continue_fishing = False
-        self.repair_enabled = config['repair']['enabled'].get()
-        self.repair_interval_seconds = config['repair']['interval'].get()
         self.last_repair_time = int(time())
-        self.bait_enabled = config['bait']['enabled'].get()
-        self.afk_prevention_enabled = config['afk_prevention']['enabled'].get()
         self.results = ResultSet()
-        self.scanner = Scanner(config)
-        self.auto_gui = FisherAutoGui(config)
+        self._scanner = Scanner(view_model)
+        self._auto_gui = FisherAutoGui(view_model)
+
+    @property
+    def repair_enabled(self):
+        return self.view_model['repair']['enabled']\
+            .get()
+
+    @property
+    def repair_interval_seconds(self):
+        return self.view_model['repair']['interval']\
+            .get()
+
+    @property
+    def bait_enabled(self):
+        return self.view_model['bait']['enabled']\
+            .get()
+
+    @property
+    def afk_prevention_enabled(self):
+        return self.view_model['afk_prevention']['enabled']\
+            .get()
 
     def _reset(self):
-        self.auto_gui.run_reset_ui_sequence()
+        self._auto_gui.run_reset_ui_sequence()
         self.results.clear()
         self.state = FisherState.IDLE
 
@@ -53,32 +70,32 @@ class Fisher:
                 if should_repair_in < 0:
                     self.last_repair_time = int(time())
                     info("Repairing")
-                    self.auto_gui.run_repair_sequence()
+                    self._auto_gui.run_repair_sequence()
                     if self.afk_prevention_enabled:
                         info("Preventing AFK detection")
-                        self.auto_gui.run_afk_prevention_sequence()
+                        self._auto_gui.run_afk_prevention_sequence()
                     if self.bait_enabled:
                         info("Selecting bait")
-                        self.auto_gui.run_select_bait_sequence()
+                        self._auto_gui.run_select_bait_sequence()
             info("Casting fishing rod...")
-            self.auto_gui.run_cast_sequence()
+            self._auto_gui.run_cast_sequence()
             self.state = FisherState.WAITING_FOR_FISH
             self.update_interval = 100
         # if WAITING_FOR_FISH then wait until match is found then set state to REELING
         elif self.state == FisherState.WAITING_FOR_FISH:
-            fish_noticed_result = self.scanner.check_fish_noticed()
+            fish_noticed_result = self._scanner.check_fish_noticed()
             if fish_noticed_result == True:
                 info("Fish noticed!")
-                self.auto_gui.run_fish_noticed_sequence()
+                self._auto_gui.run_fish_noticed_sequence()
                 self.state = FisherState.REELING
                 self.update_interval = 10
                 info("Reeling...")
         # if REELING then check sub state and act accordingly until no sub state is found then set to IDLE
         elif self.state == FisherState.REELING:
-            reeling_state = self.scanner.get_reeling_state()
+            reeling_state = self._scanner.get_reeling_state()
             if reeling_state == 'green':
                 info("Reeling in fish")
-                self.auto_gui.run_reel_fish_sequence()
+                self._auto_gui.run_reel_fish_sequence()
             elif reeling_state == 'orange' or reeling_state == 'red':
                 info("Pausing reeling to avoid line break")
                 self.state = FisherState.PAUSE_REELING
@@ -88,9 +105,9 @@ class Fisher:
         # if PAUSE_REELING then check if the fishing icon is at its minimum again and if so reel the fish 
         # and set state to REELING again
         elif self.state == FisherState.PAUSE_REELING:
-            if self.scanner.can_start_reeling_again():
+            if self._scanner.can_start_reeling_again():
                 info("Starting to reel again...")
-                self.auto_gui.run_reel_fish_sequence()
+                self._auto_gui.run_reel_fish_sequence()
                 self.state = FisherState.REELING
         # special handling for the REELING_NO_MATCH case which can either indicate that the color 
         # was in a transition state OR the fish has been caught. duration is set really low because
@@ -98,11 +115,11 @@ class Fisher:
         elif self.state == FisherState.REELING_NO_MATCH:
             if self.results.get_sequence_duration() > 1.5:
                 info("Fish caught!")
-                self.auto_gui.run_fish_caught_sequence()
+                self._auto_gui.run_fish_caught_sequence()
                 self.state = FisherState.IDLE
                 self.results.clear()
             else:
-                reeling_state = self.scanner.get_reeling_state()
+                reeling_state = self._scanner.get_reeling_state()
                 if reeling_state is not None:
                     info("Reeling state recognized, resuming reeling")
                     self.state = FisherState.REELING
