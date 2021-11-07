@@ -3,12 +3,12 @@ from tkinter.constants import HORIZONTAL, EW
 from view_model import config_view_model
 from gui.validation import vcmd_factory
 
-def bait_column_equip_position(bait_column):
-    header_label = Label(bait_column, text = "Equip button positions (px)")
-    header_label.grid(row=2, column=0)
+def check_repair_column_position(column):
+    header_label = Label(column, text = "Position (px)")
+    header_label.grid(row=0, column=0)
 
-    position_container = LabelFrame(bait_column)
-    position_container.grid(sticky=EW, row=3, column=0, padx=5, pady=(0, 5))
+    position_container = LabelFrame(column)
+    position_container.grid(sticky=EW, row=1, column=0, padx=5, pady=(0, 5))
 
     # X
 
@@ -23,14 +23,14 @@ def bait_column_equip_position(bait_column):
         from_=0, 
         to=config_view_model['resolution']['x'].get(), 
         orient=HORIZONTAL, 
-        variable=config_view_model['bait']['ui_positions']['equip']['x']
-    )
+        variable=config_view_model['verification']['repair']['region']['left']
+        )
     x_scale.grid(row=0, column=1)
 
     x_entry = Entry(
         x_container, 
-        width=4,
-        textvariable=config_view_model['bait']['ui_positions']['equip']['x'],
+        width=4, 
+        textvariable=config_view_model['verification']['repair']['region']['left'],
         validate='key', 
         validatecommand=vcmd_factory(x_container, "int")
         )
@@ -49,14 +49,14 @@ def bait_column_equip_position(bait_column):
         from_=0, 
         to=config_view_model['resolution']['y'].get(), 
         orient=HORIZONTAL, 
-        variable=config_view_model['bait']['ui_positions']['equip']['y']
+        variable=config_view_model['verification']['repair']['region']['top']
         )
     y_scale.grid(row=0, column=1)
 
     y_entry = Entry(
         y_container, 
         width=4, 
-        textvariable=config_view_model['bait']['ui_positions']['equip']['y'],
+        textvariable=config_view_model['verification']['repair']['region']['top'],
         validate='key', 
         validatecommand=vcmd_factory(y_container, "int")
         )

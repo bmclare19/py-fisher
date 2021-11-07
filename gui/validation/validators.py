@@ -3,7 +3,8 @@ from wrappers.logging_wrapper import debug
 _factory_types = ['float', 'int']
 
 def _float_validator(action, index, value_if_allowed,\
-    prior_value, text, validation_type, trigger_type, widget_name):
+    prior_value, text, validation_type, trigger_type, \
+        widget_name):
     if value_if_allowed:
         try:
             float(value_if_allowed)
@@ -16,7 +17,8 @@ def _float_validator(action, index, value_if_allowed,\
         return False
 
 def _int_validator(action, index, value_if_allowed,\
-    prior_value, text, validation_type, trigger_type, widget_name):
+    prior_value, text, validation_type, trigger_type, \
+        widget_name):
     if value_if_allowed:
         try:
             int(value_if_allowed)
@@ -27,7 +29,6 @@ def _int_validator(action, index, value_if_allowed,\
         return True
     else:
         return False
-
 
 def vcmd_factory(widget, type_):
 

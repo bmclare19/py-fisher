@@ -1,6 +1,7 @@
 from tkinter import Toplevel, Canvas, Variable
 from tkinter.constants import TOP, BOTH
 from wrappers.logging_wrapper import debug
+from view_model import register_vm_updates, unregister_vm_updates
 
 class DraggableMixin:
     def __init__(self, *args, on_drag=None, **kwargs):
@@ -47,12 +48,10 @@ class RectangleWindow(DraggableMixin, FloatingWindow):
 
         self._variable_traces = []
 
-        def __register_vm_updates(*vars_):
-            for v in vars_:
-                self._variable_traces.append(
-                    (v, "write", v.trace_add("write", lambda *a: self._on_vm_update(v)))
-                )
-        __register_vm_updates(self.x, self.y, self.width, self.height)
+        register_vm_updates(
+            self._on_vm_update,
+            self.x, self.y, self.width, self.height
+            )
 
         self.protocol("WM_DELETE_WINDOW", self._on_closing)
         self.bind('<Destroy>', self._on_closing)
@@ -68,15 +67,14 @@ class RectangleWindow(DraggableMixin, FloatingWindow):
         self._redraw()
 
     def _on_closing(self, *args):
-        while len(self._variable_traces): 
-            t = self._variable_traces.pop(0)
-            t[0].trace_remove(t[1], t[2])
+        unregister_vm_updates(
+            self._variable_traces
+        )
             
     def _on_vm_update(self, v):
         try:
-            _ = v.get()
             # check if the view actually needs to be updated
-            if self.x.get() != self._x or self.y.get() != self._y:
+            if v.get() != v._previous_value:
                 self._redraw()
         except: 
             pass
@@ -84,19 +82,16 @@ class RectangleWindow(DraggableMixin, FloatingWindow):
     def _on_drag(self, x, y):
         """A callback that handles updating the view model when the 
         window position changed via DraggableMixin.
-        
-        Setting the view models will cause _on_vm_update to be called 
-        effectively doing what has already been done so we need to prevent
-        that from happening. We handle that case by setting a variable to
-        the previous value and checking if the new value is different from
-        the current."""
+        """
         # add the padding because padding calculation is handled internally
-        # and the provided x and y values are really vm - padding
-        self.x.set(x + self._inherent_window_padding)
-        self._x = self.x.get()
+        # and the provided x and y values are really vm - padding.
+        # manually set previous value because we don't need to redraw
+        # the widget (drag handler already did that)
+        self.x._previous_value = x + self._inherent_window_padding
+        self.x.set(self.x._previous_value)
 
-        self.y.set(y + self._inherent_window_padding)
-        self._y = self.y.get()
+        self.y._previous_value = y + self._inherent_window_padding
+        self.y.set(self.y._previous_value)
 
     def _redraw(self):
         if self._rectangle_id is not None:

@@ -1,4 +1,4 @@
-from fishing.models import Fisher
-from gui.view_model import config_view_model
+from .fisher import Fisher
+from view_model import config_view_model
 
 fisher = Fisher(config_view_model)
