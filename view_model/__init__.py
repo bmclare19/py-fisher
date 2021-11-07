@@ -1,9 +1,7 @@
-from functools import wraps
-from gui import root
-from app_config import config, CONFIG_PATH
 from yaml import dump
+from functools import wraps
+from app_config import config, CONFIG_PATH
 from tkinter import Variable, IntVar, BooleanVar, StringVar, DoubleVar
-from wrappers.logging_wrapper import debug
 
 def prefix_function(function, prefunction):
     @wraps(function)
@@ -12,20 +10,18 @@ def prefix_function(function, prefunction):
         return function(*args, **kwargs)
     return run
 
-def _set_previous(self, *args, **kwargs):
+def _hook_init(self, *args, **kwargs):
+    self._previous_value = kwargs['value'] if 'value' in kwargs else None
+
+def _hook_set(self, *args, **kwargs):
     try:
-        self.__setattr__(
-            '__previous_value', 
-            self.get()
-            )
+        self._previous_value = self.get()
     except:
-        self.__setattr__(
-            '__previous_value', 
-            self._default
-            )
+        self._previous_value = self._default
 
 # this is a terrible idea
-Variable.set = prefix_function(Variable.set, _set_previous)
+Variable.__init__ = prefix_function(Variable.__init__, _hook_init)
+Variable.set = prefix_function(Variable.set, _hook_set)
 
 def _create_variable(value):
 
@@ -71,8 +67,20 @@ def _view_model_to_dict(src, dst):
 
 config_view_model = _dict_to_view_model(config, {})
 
+def register_vm_updates(on_update, *vars_):
+    traces = []
+    for v in vars_:
+        traces.append(
+            (v, "write", v.trace_add("write", lambda *a: on_update(v)))
+        )
+    return traces
+
+def unregister_vm_updates(vm_traces):
+    while vm_traces: 
+        t = vm_traces.pop(0)
+        t[0].trace_remove(t[1], t[2])
+
 def save_data():
     d = _view_model_to_dict(config_view_model, {})
-
     with open(CONFIG_PATH, 'w') as yaml_file:
         dump(d, yaml_file, sort_keys=False)

@@ -1,13 +1,13 @@
 from tkinter import Frame, Label, LabelFrame, Scale, Entry
 from tkinter.constants import HORIZONTAL, EW
-from gui.validation.validators import vcmd_factory
-from gui.view_model import config_view_model
+from view_model import config_view_model
+from gui.validation import vcmd_factory
 
-def fishing_column_attributes(fishing_column):
-    header_label = Label(fishing_column, text = "Rectangle attributes (px)")
+def check_repair_column_size(column):
+    header_label = Label(column, text = "Size (px)")
     header_label.grid(row=2, column=0)
 
-    attributes_container = LabelFrame(fishing_column)
+    attributes_container = LabelFrame(column)
     attributes_container.grid(sticky=EW, row=3, column=0, padx=5)
 
     # Width
@@ -23,14 +23,14 @@ def fishing_column_attributes(fishing_column):
          from_=0, 
          to=config_view_model['resolution']['x'].get(), 
          orient=HORIZONTAL, 
-         variable=config_view_model['fishing']['width']
+         variable=config_view_model['verification']['repair']['region']['width']
          )
     width_scale.grid(row=0, column=1)
 
     width_entry = Entry(
         width_container, 
         width=4, 
-        textvariable=config_view_model['fishing']['width'],
+        textvariable=config_view_model['verification']['repair']['region']['width'],
         validate='key', 
         validatecommand=vcmd_factory(width_container, "int")
         )
@@ -49,14 +49,14 @@ def fishing_column_attributes(fishing_column):
         from_=0, 
         to=config_view_model['resolution']['y'].get(), 
         orient=HORIZONTAL, 
-        variable=config_view_model['fishing']['height']
+        variable=config_view_model['verification']['repair']['region']['height']
         )
     height_scale.grid(row=0, column=1)
 
     height_entry = Entry(
         height_container, 
         width=4, 
-        textvariable=config_view_model['fishing']['height'],
+        textvariable=config_view_model['verification']['repair']['region']['height'],
         validate='key', 
         validatecommand=vcmd_factory(height_container, "int")
         )

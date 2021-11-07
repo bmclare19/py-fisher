@@ -1,8 +1,8 @@
 from time import time
-from fishing.helpers import TimeoutRange
-from fishing.scanner import scanner
+from .helpers import Region, TimeoutRange, Vec2
+from .scanner import scanner
 from wrappers.logging_wrapper import info, trace, error
-from wrappers.win32api_wrapper import left_down, left_up, key_up, key_down
+from wrappers.win32api_wrapper import left_down, left_up, key_up, key_down, move_mouse
 
 class Waiter:
 
@@ -12,10 +12,10 @@ class Waiter:
         self.wait_timeout_ms = None
 
     def start(self, tr):
-        self.waiting = True
-        self.wait_start = time()
         self.wait_timeout_ms = tr.random_timeout_ms() \
             if isinstance(tr, TimeoutRange) else tr
+        self.waiting = True
+        self.wait_start = time()
 
     def is_waiting(self):
         if self.waiting:
@@ -35,19 +35,23 @@ class BaseSequence:
     class State:
         INIT = 'INIT'
         WAITING = 'WAITING'
+        RUN_CHILD = 'RUN_CHILD'
         COMPLETE = 'COMPLETE'
         ERROR = 'ERROR'
 
     def __init__(self, start_state=None):
         # state objects
-        self._start_state = self._state = start_state if start_state is not None else self.State.INIT
-        self._next_state = None
+        self._start_state = start_state if start_state is not None else self.State.INIT
+        self._state = None
+        self._next_state = self._start_state
 
         # waiter object
         self.waiter = Waiter()
 
         self._sequence_start = None
         self._update_count = 0
+
+        self._child = None
 
     @property
     def state(self):
@@ -79,13 +83,12 @@ class BaseSequence:
 
     def is_error(self):
         """Returns the duration of the current sequence in ms"""
-        if self.state == self.State.ERROR:
-            return True
-        return self.state_elapsed_ms > 25000
+        return self.state == self.State.ERROR or \
+            self.state_elapsed_ms > 25000
 
     def reset(self):
-        self._state = self._start_state
-        self._next_state = None
+        self._state = None
+        self._next_state = self._start_state
         self._sequence_start = None
         self._update_count = 0
         self.waiter.reset()
@@ -96,6 +99,11 @@ class BaseSequence:
         self.state = self.State.WAITING
         self._next_state = next_state
 
+    def _run_child_then(self, child, next_state):
+        self._child = child
+        self.state = self.State.RUN_CHILD
+        self._next_state = next_state
+
     def _update(self):
         raise NotImplementedError(
             "Implement me bitch"
@@ -104,6 +112,10 @@ class BaseSequence:
     def update(self):
         if self.is_first_run:
             trace('%s: %s' % (self.NAME, self.state))
+
+        if self._child is not None:
+            if not self._child.update(): return False
+            else: self._child = None
 
         # use the wait object to handle all waiting states
         if self.waiter.is_waiting():
@@ -127,6 +139,13 @@ class BaseSequence:
         return self.state == self.State.COMPLETE
 
 class VerifyingStartSequence(BaseSequence):
+    """Verifies that fishing is ready to start by scanning 
+    for the presence of the fishing menu. 
+    
+    Occassionaly this menu won't show up so to handle that we
+    have a max time that we are allowed to do this step and if 
+    after max time we don't find anything then we proceed."""
+
     NAME = 'VERIFYING_START'
 
     class State(BaseSequence.State):
@@ -135,21 +154,44 @@ class VerifyingStartSequence(BaseSequence):
     def __init__(self, vm):
         super().__init__(self.State.SCANNING_FOR_START)
         self.vm = vm
+        self._max_duration = 5000
+        self._region = Region(
+            vm['verification']['ready']['region']
+            )
+
+    @property
+    def enabled(self):
+        return self.vm['verification']['ready']['enabled'].get()
 
     def _update(self):
-        if self.state == self.State.SCANNING_FOR_START:
+        if not self.enabled:
             self.state = self.State.COMPLETE
+            return
+
+        if self.state_elapsed_ms > self._max_duration:
+            raise RuntimeError(
+                'Max wait time elapsed without verifying ready state'
+                )
+
+        if self.state == self.State.SCANNING_FOR_START:
+            if scanner.check_fishing_ready(self._region.bbox):
+                info('Verified ready state')
+                self.state = self.State.COMPLETE
 
 class CastingSequence(BaseSequence):
     NAME = 'CASTING'
 
     class State(BaseSequence.State):
+        FREE_LOOK = 'FREE_LOOK'
         CAST_START = 'CAST_START'
         CAST_END = 'CAST_END'
+        VERIFY_CAST = 'VERIFY_CAST'
 
     def __init__(self, vm):
         super().__init__()
         self.vm = vm
+
+        self.free_look_key = self.vm['key_bindings']['free_look']
 
         # Timeout objects
         self.free_look_anim_tr = TimeoutRange(
@@ -167,13 +209,18 @@ class CastingSequence(BaseSequence):
 
     def _update(self):
         if self.state == self.State.INIT:
-            key_up(self.vm['key_bindings']['free_look'].get())
+            key_up(self.free_look_key.get())
             self._wait_then(
                 self.free_look_anim_tr,
+                self.State.FREE_LOOK
+                )
+        elif self.state == self.State.FREE_LOOK:
+            key_down(self.free_look_key.get())
+            self._wait_then(
+                250,
                 self.State.CAST_START
                 )
         elif self.state == self.State.CAST_START:
-            key_down(self.vm['key_bindings']['free_look'].get())
             left_down()
             self._wait_then(
                 self.cast_tr,
@@ -183,8 +230,11 @@ class CastingSequence(BaseSequence):
             left_up()
             self._wait_then(
                 self.casting_tr,
-                self.State.COMPLETE
+                self.State.VERIFY_CAST
                 )
+        elif self.state == self.State.VERIFY_CAST:
+            if scanner.check_waiting_for_fish():
+                self.state = self.State.COMPLETE
 
 class ScanningForFishSequence(BaseSequence):
     NAME = 'SCANNING_FOR_FISH'
@@ -269,20 +319,19 @@ class ReelingSequence(BaseSequence):
             )
 
         self._reset_max = 0.9
-        self._reset_min = 0.7
+        self._reset_min = 0.6
         self._reset_max_wait = 4000
 
     def is_reel_reset(self):
+        # store this because it's a dynamically calculated property
+        elapsed = self.state_elapsed_ms
+        if elapsed >= self._reset_max_wait:
+            info('Max wait time for reel reset reached')
+            return True
         current_threshold_change = (self._reset_max - self._reset_min) * \
-            (self.state_elapsed_ms / self._reset_max_wait)
+            (elapsed / self._reset_max_wait)
         threshold = self._reset_max - current_threshold_change
-        if threshold < self._reset_min:
-            raise RuntimeError(
-                'Reel reset exceeded maximum allowable wait time'
-                )
-        return scanner.can_start_reeling_again(
-            threshold=threshold
-            )
+        return scanner.can_start_reeling_again(threshold=threshold)
 
     def _update(self):
         if self.state == self.State.RESET:
@@ -346,15 +395,291 @@ class FishCaughtSequence(BaseSequence):
                 self.State.COMPLETE
                 )
 
+class ResetSequence(BaseSequence):
+    NAME = 'RESETTING'
+
+    class State(BaseSequence.State):
+        RESET_MOUSE_STATE = 'RESET_MOUSE_STATE'
+        RESET_FREE_LOOK = 'RESET_FREE_LOOK'
+        ESCAPE_START = 'ESCAPE_START'
+        ESCAPE_END = 'ESCAPE_END'
+        INVENTORY_OPEN_START = 'INVENTORY_OPEN_START'
+        INVENTORY_OPEN_END = 'INVENTORY_OPEN_END'
+        INVENTORY_CLOSE_START = 'INVENTORY_CLOSE_START'
+        INVENTORY_CLOSE_END = 'INVENTORY_CLOSE_END'
+        TOGGLE_FISHING_START = 'TOGGLE_FISHING_START'
+        TOGGLE_FISHING_END = 'TOGGLE_FISHING_END'
+
+    def __init__(self, vm):
+        super().__init__()
+        self.vm = vm
+
+        self.toggle_fishing_mode_key = vm['key_bindings']['toggle_fishing_mode']
+        self.escape_key = vm['key_bindings']['escape']
+        self.inventory_key = vm['key_bindings']['inventory']
+        self.free_look_key = vm['key_bindings']['free_look']
+
+        # Animation timeout objects
+        self.toggle_fishing_mode_tr = TimeoutRange(
+            self.vm['animation']['timeouts']\
+                ['toggle_fishing_mode']
+            )
+        self.inventory_tr = TimeoutRange(
+            self.vm['animation']['timeouts']\
+                ['inventory']
+            )
+        self.escape_tr = TimeoutRange(
+            self.vm['animation']['timeouts']\
+                ['escape']
+            )
+        
+        # Interaction timeouts 
+        self.click_tr = TimeoutRange(
+            self.vm['interaction']['timeouts']\
+                ['click']
+            )
+        self.key_press_tr = TimeoutRange(
+            self.vm['interaction']['timeouts']\
+                ['key_press']
+            )
+
+    def _update(self):
+        if self.state == self.State.INIT:
+            self.state = self.State.RESET_MOUSE_STATE
+        elif self.state == self.State.RESET_MOUSE_STATE:
+            left_up()
+            self._wait_then(
+                self.click_tr,
+                self.State.RESET_FREE_LOOK
+            )
+        elif self.state == self.State.RESET_FREE_LOOK:
+            key_up(self.free_look_key.get())
+            self._wait_then(
+                self.key_press_tr,
+                self.State.ESCAPE_START
+                )
+        # Press escape
+        elif self.state == self.State.ESCAPE_START:
+            key_down(self.escape_key.get())
+            self._wait_then(
+                self.key_press_tr,
+                self.State.ESCAPE_END
+                )
+        elif self.state == self.State.ESCAPE_END:
+            key_up(self.escape_key.get())
+            self._wait_then(
+                self.escape_tr,
+                self.State.INVENTORY_OPEN_START
+                )
+        # Open inventory
+        elif self.state == self.State.INVENTORY_OPEN_START:
+            key_down(self.inventory_key.get())
+            self._wait_then(
+                self.key_press_tr,
+                self.State.INVENTORY_OPEN_END
+                )
+        elif self.state == self.State.INVENTORY_OPEN_END:
+            key_up(self.inventory_key.get())
+            self._wait_then(
+                self.inventory_tr,
+                self.State.INVENTORY_CLOSE_START
+                )
+        # Close inventory
+        elif self.state == self.State.INVENTORY_CLOSE_START:
+            key_down(self.inventory_key.get())
+            self._wait_then(
+                self.key_press_tr,
+                self.State.INVENTORY_CLOSE_END
+                )
+        elif self.state == self.State.INVENTORY_CLOSE_END:
+            key_up(self.inventory_key.get())
+            self._wait_then(
+                self.inventory_tr,
+                self.State.TOGGLE_FISHING_START
+                )
+        # Toggle fishing
+        elif self.state == self.State.TOGGLE_FISHING_START:
+            key_down(self.toggle_fishing_mode_key.get())
+            self._wait_then(
+                self.key_press_tr,
+                self.State.TOGGLE_FISHING_END
+                )
+        elif self.state == self.State.TOGGLE_FISHING_END:
+            key_up(self.toggle_fishing_mode_key.get())
+            self._wait_then(
+                self.toggle_fishing_mode_tr,
+                self.State.COMPLETE
+                )
+
+class RepairSequence(BaseSequence):
+    NAME = 'REPAIRING'
+
+    class State(BaseSequence.State):
+        CHECK_SHOULD_REPAIR = 'CHECK_SHOULD_REPAIR'
+        INVENTORY_OPEN_START = 'INVENTORY_OPEN_START'
+        INVENTORY_OPEN_END = 'INVENTORY_OPEN_END'
+        PRESS_REPAIR_KEY_START = 'PRESS_REPAIR_KEY_START'
+        MOVE_MOUSE_TO_REPAIR_START = 'MOVE_MOUSE_TO_REPAIR_START'
+        CLICK_REPAIR_START = 'CLICK_REPAIR_START'
+        CLICK_REPAIR_END = 'CLICK_REPAIR_END'
+        PRESS_REPAIR_KEY_END = 'PRESS_REPAIR_KEY_END'
+        CONFIRM_REPAIR_START = 'CONFIRM_REPAIR_START'
+        CONFIRM_REPAIR_END = 'CONFIRM_REPAIR_END'
+        INVENTORY_CLOSE_START = 'INVENTORY_CLOSE_START'
+        INVENTORY_CLOSE_END = 'INVENTORY_CLOSE_END'
+        TOGGLE_FISHING_START = 'TOGGLE_FISHING_START'
+        TOGGLE_FISHING_END = 'TOGGLE_FISHING_END'
+
+    def __init__(self, vm):
+        super().__init__()
+        self.vm = vm
+
+        self.toggle_fishing_mode_key = vm['key_bindings']['toggle_fishing_mode']
+        self.escape_key = vm['key_bindings']['escape']
+        self.inventory_key = vm['key_bindings']['inventory']
+        self.free_look_key = vm['key_bindings']['free_look']
+        self.repair_key = vm['key_bindings']['repair']
+
+        self.repair_position = Vec2(
+            vm['repair']['ui_positions']['fishing_rod']
+            )
+
+        # Animation timeout objects
+        self.toggle_fishing_mode_tr = TimeoutRange(
+            self.vm['animation']['timeouts']\
+                ['toggle_fishing_mode']
+            )
+        self.inventory_tr = TimeoutRange(
+            self.vm['animation']['timeouts']\
+                ['inventory']
+            )
+        self.escape_tr = TimeoutRange(
+            self.vm['animation']['timeouts']\
+                ['escape']
+            )
+        
+        # Interaction timeouts 
+        self.click_tr = TimeoutRange(
+            self.vm['interaction']['timeouts']\
+                ['click']
+            )
+        self.key_press_tr = TimeoutRange(
+            self.vm['interaction']['timeouts']\
+                ['key_press']
+            )
+
+        # Region
+        self._region = Region(self.vm['verification']['repair']['region'])
+
+    def _update(self):
+        if self.state == self.State.INIT:
+            self.state = self.State.CHECK_SHOULD_REPAIR
+        elif self.state == self.State.CHECK_SHOULD_REPAIR:
+            if scanner.should_repair(self._region.bbox):
+                self.state = self.State.INVENTORY_OPEN_START
+            else:
+                self.state = self.State.COMPLETE
+        # Open inventory
+        elif self.state == self.State.INVENTORY_OPEN_START:
+            key_down(self.inventory_key.get())
+            self._wait_then(
+                self.key_press_tr,
+                self.State.INVENTORY_OPEN_END
+                )
+        elif self.state == self.State.INVENTORY_OPEN_END:
+            key_up(self.inventory_key.get())
+            self._wait_then(
+                self.inventory_tr,
+                self.State.PRESS_REPAIR_KEY_START
+                )
+        # Press repair key
+        elif self.state == self.State.PRESS_REPAIR_KEY_START:
+            key_down(self.repair_key.get())
+            self._wait_then(
+                self.key_press_tr,
+                self.State.MOVE_MOUSE_TO_REPAIR_START
+                )
+        # Move mouse to fishing rod 
+        elif self.state == self.State.MOVE_MOUSE_TO_REPAIR_START:
+            move_mouse(
+                self.repair_position.x, 
+                self.repair_position.y
+                )
+            self._wait_then(
+                self.click_tr,
+                self.State.CLICK_REPAIR_START
+                )
+        # Click on the fishing rod with repair key depressed
+        elif self.state == self.State.CLICK_REPAIR_START:
+            left_down()
+            self._wait_then(
+                self.click_tr,
+                self.State.CLICK_REPAIR_END
+                )
+        elif self.state == self.State.CLICK_REPAIR_END:
+            left_up()
+            self._wait_then(
+                self.click_tr,
+                self.State.PRESS_REPAIR_KEY_END
+                )
+        elif self.state == self.State.PRESS_REPAIR_KEY_END:
+            key_up(self.repair_key.get())
+            self._wait_then(
+                self.key_press_tr,
+                self.State.CONFIRM_REPAIR_START
+                )
+        # Press confirm key
+        elif self.state == self.State.CONFIRM_REPAIR_START:
+            key_down('e')
+            self._wait_then(
+                self.key_press_tr,
+                self.State.CONFIRM_REPAIR_END
+                )
+        elif self.state == self.State.CONFIRM_REPAIR_END:
+            key_up('e')
+            self._wait_then(
+                self.key_press_tr,
+                self.State.INVENTORY_CLOSE_START
+                )
+        # Close inventory
+        elif self.state == self.State.INVENTORY_CLOSE_START:
+            key_down(self.inventory_key.get())
+            self._wait_then(
+                self.key_press_tr,
+                self.State.INVENTORY_CLOSE_END
+                )
+        elif self.state == self.State.INVENTORY_CLOSE_END:
+            key_up(self.inventory_key.get())
+            self._wait_then(
+                self.inventory_tr,
+                self.State.TOGGLE_FISHING_START
+                )
+        # Toggle fishing
+        elif self.state == self.State.TOGGLE_FISHING_START:
+            key_down(self.toggle_fishing_mode_key.get())
+            self._wait_then(
+                self.key_press_tr,
+                self.State.TOGGLE_FISHING_END
+                )
+        elif self.state == self.State.TOGGLE_FISHING_END:
+            key_up(self.toggle_fishing_mode_key.get())
+            self._wait_then(
+                self.toggle_fishing_mode_tr,
+                self.State.COMPLETE
+                )
+
 class SequenceChain:
 
     def __init__(self, vm):
         self._chain = [
+            RepairSequence(vm),
+            VerifyingStartSequence(vm),
             CastingSequence(vm),
             ScanningForFishSequence(vm),
             FishNoticedSequence(vm),
             ReelingSequence(vm),
-            FishCaughtSequence(vm)
+            FishCaughtSequence(vm),
+            ResetSequence(vm)
         ]
         self._index = -1
 
@@ -363,17 +688,25 @@ class SequenceChain:
         return None if self._index < 0 else \
             self._chain[self._index]
 
+    def run_error_sequence(self):
+        self._chain[-1].reset()
+        self._index = len(self._chain) - 1
+
+    def reset(self):
+        trace('Resetting sequence')
+        self._index = -1
+        for s in self._chain: s.reset()
+
     def is_started(self):
         return self.current is not None
 
     def start(self):
-        self._index = -1
-        for s in self._chain: s.reset()
+        self.reset()
         return self.next()
     
     def next(self):
         self._index += 1
-        if self._index >= len(self._chain): 
+        if self._index >= len(self._chain) - 1: 
             return self.start()
         return self.current
         

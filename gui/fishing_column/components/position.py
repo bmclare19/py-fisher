@@ -1,7 +1,7 @@
 from tkinter import Frame, Label, LabelFrame, Scale, Entry
 from tkinter.constants import HORIZONTAL, EW
-from gui.validation.validators import vcmd_factory
-from gui.view_model import config_view_model
+from view_model import config_view_model
+from gui.validation import vcmd_factory
 
 def fishing_column_position(fishing_column):
     header_label = Label(fishing_column, text = "Rectangle position (px)")

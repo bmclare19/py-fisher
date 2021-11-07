@@ -1,7 +1,7 @@
 from functools import partial
 from tkinter import Button, Frame
 from tkinter.constants import BOTH, BOTTOM, NSEW, TOP
-from gui.view_model import config_view_model
+from view_model import config_view_model
 from gui.gui_functions import popup_rectangle_window
 
 def bait_column_show_button(bait_column):

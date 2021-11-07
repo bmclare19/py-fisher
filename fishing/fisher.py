@@ -2,7 +2,7 @@ from fishing.sequences import SequenceChain
 from gui import root, worker_pool
 from wrappers.logging_wrapper import info, trace
 
-class Fisher2:
+class Fisher:
 
     def __init__(self, view_model):
         self.view_model = view_model
@@ -10,17 +10,14 @@ class Fisher2:
         self.continue_fishing = False
         self.sequence = SequenceChain(self.view_model)
 
-    def _reset(self):
-        pass
-
     def _update(self):
         if not self.continue_fishing:
-            info("Stopped fishing.")
-            self.state = Fisher2.State.NONE
+            self.sequence.reset()
+            info("Stopped fishing")
             return
 
         if not self.sequence.is_started():
-            info("Started fishing!")
+            info("Started fishing")
             self.sequence.start()
 
         if self.sequence.current.update():
@@ -30,7 +27,7 @@ class Fisher2:
         # likely an error and everything needs to be reset
         if self.sequence.current.is_error():
             info("A problem was detected. Resetting UI and fisher state")
-            self._reset()
+            self.sequence.run_error_sequence()
 
         root.after(
             self.update_interval,

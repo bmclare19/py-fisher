@@ -1,6 +1,6 @@
 from tkinter import Label, LabelFrame, Entry
 from tkinter.constants import EW, E, RIGHT, W, SE
-from gui.view_model import config_view_model
+from view_model import config_view_model
 
 def repairing_column_interval(repairing_column):
     frame = LabelFrame(repairing_column)

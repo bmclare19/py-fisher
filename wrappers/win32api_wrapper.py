@@ -129,7 +129,7 @@ class Mouse:
     # Helpers
 
     def click_mouse_with_coordinates(self, x, y):
-        self.move_mouse(x, y)
+        self.move(x, y)
         sleep(random_timeout_mouse())
         self.left_click()
 

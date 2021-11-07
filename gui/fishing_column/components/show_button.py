@@ -1,7 +1,7 @@
 from tkinter import LabelFrame, Button
 from tkinter.constants import BOTH, EW
 from functools import partial
-from gui.view_model import config_view_model
+from view_model import config_view_model
 from gui.gui_functions import popup_rectangle_window
 
 def fishing_column_show_button(fishing_column):

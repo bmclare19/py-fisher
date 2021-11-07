@@ -3,11 +3,13 @@ key_bindings:
   equip_bait: f4
   inventory: b
   free_look: v
+  escape: esc
+  repair: r
 fishing:
-  left: 914
-  top: 94
+  left: 700
+  top: 175
   width: 400
-  height: 800
+  height: 900
   timeouts:
     noticed:
       min: 250
@@ -26,8 +28,8 @@ repair:
   interval: 400
   ui_positions:
     fishing_rod:
-      x: 1400
-      y: 555
+      x: 854
+      y: 655
   use_repair_kit: false
   timeouts:
     arm_disarm:
@@ -81,3 +83,45 @@ resolution:
   x: 1920
   y: 1080
 log_lvl: TRACE
+animation:
+  timeouts:
+    toggle_fishing_mode:
+      min: 1000
+      max: 1500
+    fish_caught:
+      min: 1500
+      max: 2000
+    free_look:
+      min: 1500
+      max: 2000
+    casting:
+      min: 1500
+      max: 2000
+    inventory:
+      min: 1500
+      max: 2000
+    escape:
+      min: 1500
+      max: 2000
+interaction:
+  timeouts:
+    click:
+      min: 30
+      max: 100
+    key_press:
+      min: 50
+      max: 150
+verification:
+  ready:
+    enabled: true
+    region:
+      left: 1025
+      top: 690
+      width: 75
+      height: 155
+  repair:
+    region:
+      top: 1007
+      left: 1680
+      width: 198
+      height: 48
