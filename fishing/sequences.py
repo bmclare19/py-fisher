@@ -540,6 +540,8 @@ class RepairSequence(BaseSequence):
         self.free_look_key = vm['key_bindings']['free_look']
         self.repair_key = vm['key_bindings']['repair']
 
+        self.repair_enabled = vm['repair']['enabled']
+
         self.repair_position = Vec2(
             vm['repair']['ui_positions']['fishing_rod']
             )
@@ -575,7 +577,7 @@ class RepairSequence(BaseSequence):
         if self.state == self.State.INIT:
             self.state = self.State.CHECK_SHOULD_REPAIR
         elif self.state == self.State.CHECK_SHOULD_REPAIR:
-            if scanner.should_repair(self._region.bbox):
+            if self.repair_enabled.get() and scanner.should_repair(self._region.bbox):
                 self.state = self.State.INVENTORY_OPEN_START
             else:
                 self.state = self.State.COMPLETE
